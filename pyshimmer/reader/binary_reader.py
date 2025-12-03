@@ -47,6 +47,7 @@ from .reader_const import (
     TRIAXCAL_OFFSET_SCALING,
     TRIAXCAL_GAIN_SCALING,
     TRIAXCAL_ALIGNMENT_SCALING,
+    SYNC_OFFSET_SIZE,
 )
 
 
@@ -65,6 +66,10 @@ class ShimmerBinaryReader(FileIOBase):
         self._rtc_diff = 0
         self._start_ts = 0
         self._trial_config = 0
+
+        self._buffer: list[list] = []
+        self._read_offset: int = 0
+        self._buffered_sync_offset: int = 0
 
         self._read_header()
 
@@ -87,7 +92,7 @@ class ShimmerBinaryReader(FileIOBase):
         self._trial_config = self._read_trial_config()
         self._exg_regs = self._read_exg_regs()
 
-        self._samples_per_block, self._block_size = self._calculate_block_size()
+        self._samples_per_block, self._block_size, self.sample_size = self._calculate_block_size()
 
     def _read_sample_rate(self) -> int:
         self._seek(SR_OFFSET)
@@ -129,7 +134,7 @@ class ShimmerBinaryReader(FileIOBase):
         num_samples = int((BLOCK_LEN - sync_stamp) / sample_size)
         block_len = num_samples * sample_size + sync_stamp
 
-        return num_samples, block_len
+        return num_samples, block_len, sample_size
 
     def _read_sync_offset(self) -> int | None:
         # For this read operation we assume that every synchronization offset is
@@ -155,6 +160,7 @@ class ShimmerBinaryReader(FileIOBase):
             if ch in self._active_channels:
                 ch_values.append(dtype.decode(val_bin))
 
+        self._read_offset += self.sample_size
         return ch_values
 
     def _read_data_block(self) -> tuple[list[list], int]:
@@ -164,6 +170,7 @@ class ShimmerBinaryReader(FileIOBase):
         try:
             if self.has_sync:
                 sync_offset = self._read_sync_offset()
+                self._read_offset += SYNC_OFFSET_SIZE
 
             for i in range(self._samples_per_block):
                 sample = self._read_sample()
@@ -172,6 +179,46 @@ class ShimmerBinaryReader(FileIOBase):
             pass
 
         return samples, sync_offset
+
+    def _get(self, batch_size: int) -> tuple[list, list[tuple[int, int]]]:
+        if batch_size < 1:
+            raise ValueError("batch_size must be greater than 0")
+
+        if batch_size <= len(self._buffer):
+            samples = self._buffer[:batch_size]
+            self._buffer = self._buffer[batch_size:]
+        #    sample_ctr = (self._read_offset - (self._read_offset % self._block_size)) // self._block_size
+            return samples, [(0, self._buffered_sync_offset )] if self.has_sync else []
+
+        sync_offsets = [(0, self._buffered_sync_offset)]
+        samples = self._buffer
+        sample_ctr = len(samples)
+        batch_size -= sample_ctr
+
+        target_idx = DATA_LOG_OFFSET + self._read_offset
+        if not self._tell() == target_idx:
+            self._seek(target_idx)
+
+        while True:
+            block_samples, sync_offset = self._read_data_block()
+
+            if sync_offset is not None:
+                sync_offsets += [(sample_ctr, sync_offset)]
+
+            samples += block_samples
+            sample_ctr += len(block_samples)
+            batch_size -= len(block_samples)
+            if batch_size <= 0:
+                self._buffer = samples[batch_size:]
+                samples = samples[:batch_size]
+                self._buffered_sync_offset = sync_offset
+                break
+
+            if len(block_samples) < self.samples_per_block:
+                # We have reached EOF
+                break
+
+        return samples, sync_offsets
 
     def _read_contents(self) -> tuple[list, list[tuple[int, int]]]:
         sync_offsets = []
@@ -194,6 +241,7 @@ class ShimmerBinaryReader(FileIOBase):
 
         return samples, sync_offsets
 
+
     def _read_exg_regs(self) -> tuple[bytes, bytes]:
         self._seek(EXG_REG_OFFSET)
 
@@ -215,6 +263,23 @@ class ShimmerBinaryReader(FileIOBase):
         alignment = np.array(params_raw[6:]).reshape((3, 3))
 
         return offset, gain, alignment
+
+    def read_batch(self, batch_size: int):
+        samples, sync_offsets = self._get(batch_size)
+
+        samples_per_ch = list(zip(*samples))
+        arr_per_ch = [np.array(s) for s in samples_per_ch]
+        samples_dict = dict(zip(self._channels, arr_per_ch))
+
+        if self.has_sync and len(sync_offsets) > 0:
+            off_index, offset = list(zip(*sync_offsets))
+            off_index_arr = np.array(off_index)
+            offset_arr = np.array(offset)
+            sync_data = (off_index_arr, offset_arr)
+        else:
+            sync_data = ((), ())
+
+        return samples_dict, sync_data
 
     def read_data(self):
         samples, sync_offsets = self._read_contents()

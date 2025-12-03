@@ -73,7 +73,7 @@ class SingleChannelProcessor(ChannelPostProcessor, ABC):
 
         result = channels.copy()
         for ch_type in ch_types:
-            result[ch_type] = self.process_channel(ch_type, channels[ch_type], reader)
+                result[ch_type] = self.process_channel(ch_type, channels[ch_type], reader)
 
         return result
 
@@ -198,15 +198,33 @@ class ShimmerReader:
         else:
             return ts_boot
 
-    def _process_signals(
-        self, channels: dict[EChannelType, np.ndarray]
-    ) -> dict[EChannelType, np.ndarray]:
+    def _process_signals(self, channels: dict[EChannelType, np.ndarray]) -> dict[EChannelType, np.ndarray]:
         result = channels.copy()
 
         for processor in self._processors:
             result = processor.process(result, self._bin_reader)
 
         return result
+
+    def get_batch(self, batch_size: int):
+        samples, sync_offsets = self._bin_reader.read_batch(batch_size)
+        ts_raw = samples.pop(EChannelType.TIMESTAMP)
+
+        ts_unwrapped = unwrap_device_timestamps(ts_raw)
+        ts_sane = self._apply_clock_offsets(ts_unwrapped)
+
+        if self._sync and self._bin_reader.has_sync:
+            ts_sane = self._apply_synchronization(ts_sane, *sync_offsets)
+
+        output_samples = None
+        if self._pp:
+            output_samples = self._process_signals(samples)
+        else:
+            output_samples = samples
+
+        timestamps = ticks2sec(ts_sane)
+
+        return timestamps, output_samples
 
     def load_file_data(self):
         samples, sync_offsets = self._bin_reader.read_data()
@@ -231,7 +249,6 @@ class ShimmerReader:
     def __getitem__(self, item: EChannelType) -> np.ndarray:
         if item == EChannelType.TIMESTAMP:
             return self.timestamp
-
         return self._ch_samples[item]
 
     @property
