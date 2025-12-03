@@ -73,7 +73,7 @@ class SingleChannelProcessor(ChannelPostProcessor, ABC):
 
         result = channels.copy()
         for ch_type in ch_types:
-                result[ch_type] = self.process_channel(ch_type, channels[ch_type], reader)
+            result[ch_type] = self.process_channel(ch_type, channels[ch_type], reader)
 
         return result
 
