@@ -16,7 +16,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import BinaryIO
+from typing import BinaryIO, Any
 
 import numpy as np
 
@@ -206,8 +206,7 @@ class ShimmerReader:
 
         return result
 
-    def get_batch(self, batch_size: int):
-        samples, sync_offsets = self._bin_reader.read_data(batch_size)
+    def _finalize_data(self, samples: dict[EChannelType, Any], sync_offsets: list[tuple[int, int]]) -> tuple[int | float | np.ndarray, dict[EChannelType, Any]]:
         ts_raw = samples.pop(EChannelType.TIMESTAMP)
 
         ts_unwrapped = unwrap_device_timestamps(ts_raw)
@@ -223,25 +222,15 @@ class ShimmerReader:
             output_samples = samples
 
         timestamps = ticks2sec(ts_sane)
-
         return timestamps, output_samples
+
+    def get_batch(self, batch_size: int):
+        samples, sync_offsets = self._bin_reader.read_data(batch_size)
+        return self._finalize_data(samples, sync_offsets)
 
     def load_file_data(self):
         samples, sync_offsets = self._bin_reader.read_data()
-        ts_raw = samples.pop(EChannelType.TIMESTAMP)
-
-        ts_unwrapped = unwrap_device_timestamps(ts_raw)
-        ts_sane = self._apply_clock_offsets(ts_unwrapped)
-
-        if self._sync and self._bin_reader.has_sync:
-            ts_sane = self._apply_synchronization(ts_sane, *sync_offsets)
-
-        if self._pp:
-            self._ch_samples = self._process_signals(samples)
-        else:
-            self._ch_samples = samples
-
-        self._ts = ticks2sec(ts_sane)
+        self._ts, self._ch_samples = self._finalize_data(samples, sync_offsets)
 
     def get_exg_reg(self, chip_id: int) -> ExGRegister:
         return self._bin_reader.get_exg_reg(chip_id)
