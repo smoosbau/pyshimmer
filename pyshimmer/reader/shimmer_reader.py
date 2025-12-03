@@ -254,3 +254,11 @@ class ShimmerReader:
     @property
     def exg_reg2(self) -> ExGRegister:
         return self.get_exg_reg(1)
+
+    @property
+    def enabled_sensors(self) -> list[ESensorGroup]:
+        return self._bin_reader.enabled_sensors
+
+    @enabled_sensors.setter
+    def enabled_sensors(self, enabled_sensors: list[ESensorGroup]) -> None:
+        self._bin_reader.enabled_sensors = enabled_sensors

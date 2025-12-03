@@ -57,6 +57,10 @@ class ShimmerBinaryReader(FileIOBase):
 
         self._sensors = []
         self._channels = []
+        self._channel_dtypes = []
+        self._active_sensors = []
+        self._active_channels = []
+        self._active_channel_dtypes = []
         self._sr = 0
         self._rtc_diff = 0
         self._start_ts = 0
@@ -73,8 +77,11 @@ class ShimmerBinaryReader(FileIOBase):
     def _read_header(self) -> None:
         self._sr = self._read_sample_rate()
         self._sensors = self._read_enabled_sensors()
+        self._active_sensors = self._sensors
         self._channels = self.get_data_channels(self._sensors)
+        self._active_channels = self._channels
         self._channel_dtypes = get_ch_dtypes(self._channels)
+        self._active_channel_dtypes = self._channel_dtypes
         self._rtc_diff = self._read_rtc_clock_diff()
         self._start_ts = self._read_start_time()
         self._trial_config = self._read_trial_config()
@@ -145,17 +152,18 @@ class ShimmerBinaryReader(FileIOBase):
 
         for ch, dtype in zip(self._channels, self._channel_dtypes):
             val_bin = self._read(dtype.size)
-            ch_values.append(dtype.decode(val_bin))
+            if ch in self._active_channels:
+                ch_values.append(dtype.decode(val_bin))
 
         return ch_values
 
     def _read_data_block(self) -> tuple[list[list], int]:
-        sync_tuple = None
+        sync_offset = None
         samples = []
 
         try:
             if self.has_sync:
-                sync_tuple = self._read_sync_offset()
+                sync_offset = self._read_sync_offset()
 
             for i in range(self._samples_per_block):
                 sample = self._read_sample()
@@ -163,7 +171,7 @@ class ShimmerBinaryReader(FileIOBase):
         except IOError:
             pass
 
-        return samples, sync_tuple
+        return samples, sync_offset
 
     def _read_contents(self) -> tuple[list, list[tuple[int, int]]]:
         sync_offsets = []
@@ -254,11 +262,17 @@ class ShimmerBinaryReader(FileIOBase):
 
     @property
     def enabled_sensors(self) -> list[ESensorGroup]:
-        return self._sensors
+        return self._active_sensors
+
+    @enabled_sensors.setter
+    def enabled_sensors(self, sensor_filter: list[ESensorGroup]) -> None:
+        self._active_sensors = sensor_filter
+        self._active_channels = self.get_data_channels(self._active_sensors)
+        self._active_channel_dtypes = get_ch_dtypes(self._active_channels)
 
     @property
     def enabled_channels(self) -> list[EChannelType]:
-        return self._channels
+        return self._active_channels
 
     @property
     def has_global_clock(self) -> bool:
