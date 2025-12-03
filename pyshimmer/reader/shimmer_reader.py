@@ -207,7 +207,7 @@ class ShimmerReader:
         return result
 
     def get_batch(self, batch_size: int):
-        samples, sync_offsets = self._bin_reader.read_batch(batch_size)
+        samples, sync_offsets = self._bin_reader.read_data(batch_size)
         ts_raw = samples.pop(EChannelType.TIMESTAMP)
 
         ts_unwrapped = unwrap_device_timestamps(ts_raw)

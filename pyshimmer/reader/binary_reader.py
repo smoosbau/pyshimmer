@@ -264,25 +264,12 @@ class ShimmerBinaryReader(FileIOBase):
 
         return offset, gain, alignment
 
-    def read_batch(self, batch_size: int):
-        samples, sync_offsets = self._get(batch_size)
-
-        samples_per_ch = list(zip(*samples))
-        arr_per_ch = [np.array(s) for s in samples_per_ch]
-        samples_dict = dict(zip(self._channels, arr_per_ch))
-
-        if self.has_sync and len(sync_offsets) > 0:
-            off_index, offset = list(zip(*sync_offsets))
-            off_index_arr = np.array(off_index)
-            offset_arr = np.array(offset)
-            sync_data = (off_index_arr, offset_arr)
+    def read_data(self, batch_size: int = -1):
+        samples = sync_offsets = None
+        if batch_size < 1:
+            samples, sync_offsets = self._read_contents()
         else:
-            sync_data = ((), ())
-
-        return samples_dict, sync_data
-
-    def read_data(self):
-        samples, sync_offsets = self._read_contents()
+            samples, sync_offsets = self._get(batch_size)
 
         samples_per_ch = list(zip(*samples))
         arr_per_ch = [np.array(s) for s in samples_per_ch]
