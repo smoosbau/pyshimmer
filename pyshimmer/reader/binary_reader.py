@@ -187,7 +187,6 @@ class ShimmerBinaryReader(FileIOBase):
         if batch_size <= len(self._buffer):
             samples = self._buffer[:batch_size]
             self._buffer = self._buffer[batch_size:]
-        #    sample_ctr = (self._read_offset - (self._read_offset % self._block_size)) // self._block_size
             return samples, [(0, self._buffered_sync_offset )] if self.has_sync else []
 
         sync_offsets = [(0, self._buffered_sync_offset)]
