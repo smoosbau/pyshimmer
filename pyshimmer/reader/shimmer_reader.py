@@ -27,7 +27,11 @@ from pyshimmer.dev.channels import (
     EChannelType,
 )
 from pyshimmer.dev.exg import is_exg_ch, get_exg_ch, ExGRegister
-from pyshimmer.reader.binary_reader import ShimmerBinaryReader, ShimmerBinaryFileReader, ShimmerBinaryStreamReader
+from pyshimmer.reader.binary_reader import (
+    ShimmerBinaryReader,
+    ShimmerBinaryFileReader,
+    ShimmerBinaryStreamReader,
+)
 from pyshimmer.reader.reader_const import (
     EXG_ADC_REF_VOLT,
     EXG_ADC_OFFSET,
@@ -149,10 +153,14 @@ class ShimmerReader:
         sync: bool = True,
         post_process: bool = True,
         processors: list[ChannelPostProcessor] = None,
-        batch_size: int = -1
+        batch_size: int = -1,
     ):
         if fp is not None:
-            self._bin_reader = ShimmerBinaryFileReader(fp) if batch_size < 1 else ShimmerBinaryStreamReader(fp, batch_size)
+            self._bin_reader = (
+                ShimmerBinaryFileReader(fp)
+                if batch_size < 1
+                else ShimmerBinaryStreamReader(fp, batch_size)
+            )
         elif bin_reader is not None:
             self._bin_reader = bin_reader
         else:
@@ -175,7 +183,9 @@ class ShimmerReader:
             ]
 
     @staticmethod
-    def _apply_synchronization(data_ts: np.ndarray, offset_index: np.ndarray, offsets: np.ndarray):
+    def _apply_synchronization(
+        data_ts: np.ndarray, offset_index: np.ndarray, offsets: np.ndarray
+    ):
         # We discard all synchronization offsets for which we do not possess timestamps.
         index_safe = offset_index[offset_index < len(data_ts)]
 
@@ -197,7 +207,9 @@ class ShimmerReader:
         else:
             return ts_boot
 
-    def _process_signals(self, channels: dict[EChannelType, np.ndarray]) -> dict[EChannelType, np.ndarray]:
+    def _process_signals(
+        self, channels: dict[EChannelType, np.ndarray]
+    ) -> dict[EChannelType, np.ndarray]:
         result = channels.copy()
 
         for processor in self._processors:
@@ -205,7 +217,9 @@ class ShimmerReader:
 
         return result
 
-    def _finalize_data(self, samples: dict[EChannelType, Any], sync_offsets: list[tuple[int, int]]) -> tuple[int | float | np.ndarray, dict[EChannelType, Any]]:
+    def _finalize_data(
+        self, samples: dict[EChannelType, Any], sync_offsets: list[tuple[int, int]]
+    ) -> tuple[int | float | np.ndarray, dict[EChannelType, Any]]:
         ts_raw = samples.pop(EChannelType.TIMESTAMP)
 
         ts_unwrapped = unwrap_device_timestamps(ts_raw)

@@ -94,7 +94,9 @@ class ShimmerBinaryReader(FileIOBase, ABC):
         self._active_channels = self._channels.copy()
         self._active_channel_dtypes = self._channel_dtypes.copy()
 
-        self._samples_per_block, self._block_size, self.sample_size = self._calculate_block_size()
+        self._samples_per_block, self._block_size, self.sample_size = (
+            self._calculate_block_size()
+        )
 
     def _read_sample_rate(self) -> int:
         self._seek(SR_OFFSET)
@@ -207,7 +209,9 @@ class ShimmerBinaryReader(FileIOBase, ABC):
         reg2 = self._read(EXG_REG_LEN)
         return reg1, reg2
 
-    def _read_triaxcal_params(self, offset: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def _read_triaxcal_params(
+        self, offset: int
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         fmt = ">" + 6 * "h" + 9 * "b"
 
         self._seek(offset)
@@ -221,8 +225,7 @@ class ShimmerBinaryReader(FileIOBase, ABC):
         return offset, gain, alignment
 
     @abstractmethod
-    def read_data(self):
-        ...
+    def read_data(self): ...
 
     def _finalize_data(self, samples, sync_offsets):
         samples_per_ch = list(zip(*samples))
@@ -243,7 +246,9 @@ class ShimmerBinaryReader(FileIOBase, ABC):
         reg_content = self._exg_regs[chip_id]
         return ExGRegister(reg_content)
 
-    def get_triaxcal_params(self, sensor: ESensorGroup) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def get_triaxcal_params(
+        self, sensor: ESensorGroup
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         offset = TRIAXCAL_FILE_OFFSET[sensor]
         sc_offset = TRIAXCAL_OFFSET_SCALING[sensor]
         sc_gain = TRIAXCAL_GAIN_SCALING[sensor]
