@@ -194,7 +194,6 @@ class ShimmerBinaryReader(FileIOBase, ABC):
 
             samples += block_samples
             sample_ctr += len(block_samples)
-
             if len(block_samples) < self.samples_per_block:
                 # We have reached EOF
                 break
@@ -228,7 +227,7 @@ class ShimmerBinaryReader(FileIOBase, ABC):
     def _finalize_data(self, samples, sync_offsets):
         samples_per_ch = list(zip(*samples))
         arr_per_ch = [np.array(s) for s in samples_per_ch]
-        samples_dict = dict(zip(self._channels, arr_per_ch))
+        samples_dict = dict(zip(self._active_channels, arr_per_ch))
 
         if self.has_sync and len(sync_offsets) > 0:
             off_index, offset = list(zip(*sync_offsets))
